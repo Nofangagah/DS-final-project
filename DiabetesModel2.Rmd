@@ -1,0 +1,137 @@
+---
+title: "DsDiabetes"
+author: "Farid Radityo Suharman"
+date: "2024-11-30"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Install necessary packages
+if (!require(shiny)) install.packages("shiny")
+if (!require(tidyverse)) install.packages("tidyverse")
+
+# Load libraries
+library(shiny)
+library(tidyverse)
+
+# Load dataset
+diabetes_data <- read.csv("data.csv")
+
+# Build Logistic Regression Model
+model <- glm(Diabetes_binary ~ ., data = diabetes_data %>% select(-ID), family = binomial)
+
+# Calculate Model Accuracy
+predicted_prob <- predict(model, newdata = diabetes_data, type = "response")
+predicted_class <- ifelse(predicted_prob > 0.5, 1, 0)
+accuracy <- mean(predicted_class == diabetes_data$Diabetes_binary)
+
+# Shiny App
+ui <- fluidPage(
+    titlePanel("Diabetes Prediction and Visualization"),
+    sidebarLayout(
+        sidebarPanel(
+            h4("Prediction Input"),
+            numericInput("HighBP", "High Blood Pressure (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("HighChol", "High Cholesterol (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("CholCheck", "Cholesterol Check (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("BMI", "Body Mass Index (BMI):", 25, min = 0),
+            numericInput("Smoker", "Smoker (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("Stroke", "Stroke History (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("HeartDiseaseorAttack", "Heart Disease or Heart Attack (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("PhysActivity", "Physical Activity in Past 30 Days (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("Fruits", "Consume Fruits Daily (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("Veggies", "Consume Vegetables Daily (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("HvyAlcoholConsump", "Heavy Alcohol Consumption (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("AnyHealthcare", "Any Health Coverage (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("NoDocbcCost", "Doctor Visit Blocked by Cost (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("GenHlth", "General Health Rating (1=Excellent to 5=Poor):", 3, min = 1, max = 5),
+            numericInput("MentHlth", "Mental Health Not Good (Days in Last 30):", 0, min = 0),
+            numericInput("PhysHlth", "Physical Health Not Good (Days in Last 30):", 0, min = 0),
+            numericInput("DiffWalk", "Difficulty Walking or Climbing Stairs (1=Yes, 0=No):", 0, min = 0, max = 1),
+            numericInput("Sex", "Sex (1=Male, 0=Female):", 0, min = 0, max = 1),
+            numericInput("Age", "Age Group (1=18-24 to 13=80+):", 5, min = 1, max = 13),
+            numericInput("Education", "Education Level (1=Less than Kindergarten to 6=College Graduate):", 3, min = 1, max = 6),
+            numericInput("Income", "Income Level (1=<$10K to 8=>$75K):", 4, min = 1, max = 8),
+            actionButton("predict", "Predict Diabetes"),
+            hr(),
+            h4("Visualizations"),
+            selectInput("var", "Select Variable for Visualization:", 
+                        choices = names(diabetes_data %>% select(-ID, -Diabetes_binary))),
+            selectInput("plotType", "Select Plot Type:", 
+                        choices = c("Bar Plot", "Histogram"))
+        ),
+        mainPanel(
+            textOutput("accuracy"),   # Added output for accuracy
+            textOutput("prediction"),
+            plotOutput("plot")
+        )
+    )
+)
+
+server <- function(input, output) {
+    # Display Accuracy
+    output$accuracy <- renderText({
+        paste("Model Accuracy on Training Data:", round(accuracy * 100, 2), "%")
+    })
+    
+    # Prediction
+    observeEvent(input$predict, {
+        new_data <- data.frame(
+            HighBP = input$HighBP,
+            HighChol = input$HighChol,
+            CholCheck = input$CholCheck,
+            BMI = input$BMI,
+            Smoker = input$Smoker,
+            Stroke = input$Stroke,
+            HeartDiseaseorAttack = input$HeartDiseaseorAttack,
+            PhysActivity = input$PhysActivity,
+            Fruits = input$Fruits,
+            Veggies = input$Veggies,
+            HvyAlcoholConsump = input$HvyAlcoholConsump,
+            AnyHealthcare = input$AnyHealthcare,
+            NoDocbcCost = input$NoDocbcCost,
+            GenHlth = input$GenHlth,
+            MentHlth = input$MentHlth,
+            PhysHlth = input$PhysHlth,
+            DiffWalk = input$DiffWalk,
+            Sex = input$Sex,
+            Age = input$Age,
+            Education = input$Education,
+            Income = input$Income
+        )
+        
+        prob <- predict(model, newdata = new_data, type = "response")
+        pred <- ifelse(prob > 0.5, "Diabetes Likely", "Diabetes Unlikely")
+        output$prediction <- renderText({ paste("Prediction:", pred, "| Probability:", round(prob, 2)) })
+    })
+    
+    # Visualization
+    output$plot <- renderPlot({
+        variable <- input$var
+        plotType <- input$plotType
+        
+        if (plotType == "Bar Plot") {
+            ggplot(diabetes_data, aes_string(x = variable)) +
+                geom_bar(fill = "skyblue") +
+                labs(title = paste("Bar Plot of", variable), x = variable, y = "Count") +
+                theme_minimal()
+        } else if (plotType == "Histogram") {
+            ggplot(diabetes_data, aes_string(x = variable)) +
+                geom_histogram(fill = "skyblue", bins = 10) +
+                labs(title = paste("Histogram of", variable), x = variable, y = "Frequency") +
+                theme_minimal()
+        }
+    })
+}
+
+shinyApp(ui = ui, server = server)
+
+```
+
+
+
+
